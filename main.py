@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from web.routes import router as web_router
 import uvicorn
 
-app = FastAPI(title="Google Cloud Tech Day 2025")
+app = FastAPI(title="Google Cloud Tech Week 2028")
 
 # Montar archivos estáticos
 app.mount("/static", StaticFiles(directory="web/static"), name="static")

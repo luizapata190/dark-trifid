@@ -1,8 +1,7 @@
 [tool.poetry]
 name = "google-cloud-conference"
-version = "0.1.0"
-description = "Sitio web informativo para una conferencia técnica de Google Cloud"
-authors = ["Antigravity <antigravity@google.com>"]
+description = "Sitio web informativo para Google Cloud Tech Week 2028"
+authors = ["Luinos <luizapata190@gmail.com>"]
 package-mode = false
 
 [tool.poetry.dependencies]

@@ -3,7 +3,7 @@ FROM python:3.9-slim
 
 # Establecer variables de entorno
 ENV PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=1.7.1 \
+    POETRY_VERSION=1.8.0 \
     POETRY_HOME="/opt/poetry" \
     POETRY_VIRTUALENVS_CREATE=false
 

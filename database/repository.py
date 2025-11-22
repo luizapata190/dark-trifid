@@ -1,9 +1,9 @@
 # Datos ficticios del evento
 EVENT_INFO = {
-    "title": "Google Cloud Tech Day 2025",
-    "date": "15 de Noviembre, 2025",
+    "title": "Google Cloud Tech Week 2028",
+    "date": "15 de Noviembre, 2028",
     "location": "Centro de Convenciones Tech, Ciudad de México",
-    "description": "Un día completo dedicado a explorar las últimas innovaciones en Google Cloud Platform."
+    "description": "Una semana completa dedicada a explorar las últimas innovaciones en Google Cloud Platform."
 }
 
 # Datos ficticios de los ponentes
