@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="hero" id="location">
+    <div class="container">
+        <h2>{{ event.title }}</h2>
+        <p class="lead">{{ event.description }}</p>
+        <div class="event-details">
+            <div class="detail-item">
+                <span class="icon">📅</span>
+                <span>{{ event.date }}</span>
+            </div>
+            <div class="detail-item">
+                <span class="icon">📍</span>
+                <span>{{ event.location }}</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="search-section">
+    <div class="container">
+        <form action="/" method="get" class="search-form">
+            <input type="text" name="q" placeholder="Buscar por título, ponente o categoría..." value="{{ query }}">
+            <button type="submit">Buscar</button>
+            {% if query %}
+            <a href="/" class="clear-search">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+</section>
+
+<section id="speakers" class="speakers-section" style="padding: 60px 0; background-color: #f8f9fa;">
+    <div class="container">
+        <h3 style="text-align: center; margin-bottom: 40px; font-size: 2rem; color: #202124;">Nuestros Ponentes</h3>
+        <div class="speakers-grid"
+            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 30px;">
+            {% for speaker in speakers %}
+            <div class="speaker-card"
+                style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); text-align: center;">
+                <div class="speaker-avatar"
+                    style="width: 80px; height: 80px; background-color: #e8f0fe; border-radius: 50%; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
+                    👤
+                </div>
+                <h4 style="margin-bottom: 5px;">{{ speaker.name }}</h4>
+                <p style="color: #5f6368; margin-bottom: 10px;">{{ speaker.role }}</p>
+                <a href="{{ speaker.linkedin }}" target="_blank"
+                    style="color: #1a73e8; text-decoration: none; font-weight: 500;">Ver LinkedIn</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Modal de No Resultados -->
+<div id="noResultsModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <div class="modal-icon">🔍</div>
+        <h3>No encontramos resultados</h3>
+        <p>No hay ponentes ni charlas que coincidan con tu búsqueda.</p>
+        <button class="modal-action-btn" onclick="document.querySelector('.clear-search').click()">Limpiar
+            Búsqueda</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Verificar si hay resultados
+        const speakers = document.querySelectorAll('.speaker-card');
+        const scheduleItems = document.querySelectorAll('.timeline-item:not(.lunch-break)');
+        const hasResults = speakers.length > 0 || scheduleItems.length > 0;
+        const urlParams = new URLSearchParams(window.location.search);
+        const hasQuery = urlParams.has('q') && urlParams.get('q').trim() !== '';
+
+        if (hasQuery && !hasResults) {
+            const modal = document.getElementById('noResultsModal');
+            modal.style.display = 'block';
+
+            // Cerrar modal
+            const closeBtn = document.querySelector('.close-button');
+            closeBtn.onclick = function () {
+                modal.style.display = 'none';
+            }
+
+            // Cerrar al hacer clic fuera
+            window.onclick = function (event) {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                }
+            }
+        }
+    });
+</script>
+
+<section id="schedule" class="schedule-section">
+    <div class="container">
+        <h3>Agenda del Evento</h3>
+        <div class="timeline">
+            {% for item in schedule %}
+            <div class="timeline-item {% if item.id == 'lunch' %}lunch-break{% endif %}">
+                <div class="time">{{ item.time }}</div>
+                <div class="content">
+                    <div class="category-tag {{ item.category|lower }}">{{ item.category }}</div>
+                    <h4>{{ item.title }}</h4>
+                    <p class="description">{{ item.description }}</p>
+
+                    {% if item.speaker_details %}
+                    <div class="speakers">
+                        {% for speaker in item.speaker_details %}
+                        <div class="speaker">
+                            <span class="speaker-name">{{ speaker.name }}</span>
+                            <span class="speaker-role">{{ speaker.role }}</span>
+                            <a href="{{ speaker.linkedin }}" target="_blank" class="linkedin-link">in</a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <!-- El mensaje de la agenda se maneja con el modal ahora -->
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}
