@@ -29,10 +29,7 @@ async def get_schedule(query: str = None):
         
         talk_with_speakers = {**talk, 'speaker_details': speaker_details}
 
-        if talk['id'] == 'lunch':
-             filtered_talks.append(talk_with_speakers)
-             continue
-
+        # Si hay query, filtramos todo (incluido lunch)
         if query:
             match_title = query in talk['title'].lower()
             match_cat = query in talk['category'].lower()
@@ -40,6 +37,7 @@ async def get_schedule(query: str = None):
             
             if match_title or match_cat or match_speaker:
                 filtered_talks.append(talk_with_speakers)
+        # Si no hay query, incluimos todo
         else:
             filtered_talks.append(talk_with_speakers)
             

@@ -26,7 +26,7 @@ COPY pyproject.toml poetry.lock* ./
 # Instalar dependencias del proyecto
 RUN poetry install --no-root --no-interaction --no-ansi
 
-# Copiar el resto del código de la aplicación
+# Copiar el código de la aplicación
 COPY . .
 
 # Exponer el puerto
