@@ -1,0 +1,277 @@
+name: Full Stack - Infrastructure + Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'What to do?'
+        required: true
+        type: choice
+        options:
+          - create-and-deploy
+          - deploy-only
+          - destroy-all
+
+env:
+  AWS_REGION: us-east-1
+  ECR_FRONTEND_REPOSITORY: dark-trifid-frontend
+  ECR_BACKEND_REPOSITORY: dark-trifid-backend
+
+jobs:
+  # Job 1: Crear Infraestructura con Terraform
+  create-infrastructure:
+    name: Create Infrastructure
+    if: github.event.inputs.action == 'create-and-deploy'
+    runs-on: ubuntu-latest
+    outputs:
+      ec2_ip: ${{ steps.terraform-output.outputs.public_ip }}
+      instance_id: ${{ steps.terraform-output.outputs.instance_id }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve tfplan
+
+      - name: Get Terraform Outputs
+        id: terraform-output
+        run: |
+          cd terraform
+          PUBLIC_IP=$(terraform output -raw public_ip)
+          INSTANCE_ID=$(terraform output -raw instance_id)
+          echo "public_ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+          echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "✅ Infrastructure created with IP: $PUBLIC_IP"
+
+      - name: Wait for Instance to be Ready
+        run: |
+          echo "⏳ Waiting 90 seconds for instance to fully initialize..."
+          sleep 90
+
+      - name: Infrastructure Summary
+        run: |
+          echo "### 🏗️ Infrastructure Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Instance ID:** \`${{ steps.terraform-output.outputs.instance_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Public IP:** \`${{ steps.terraform-output.outputs.public_ip }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⏭️ **Next:** Deploying application..." >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: Build y Push a ECR
+  build-and-push:
+    name: Build and Push to ECR
+    needs: [create-infrastructure]
+    if: |
+      always() &&
+      (github.event.inputs.action == 'create-and-deploy' || github.event.inputs.action == 'deploy-only') &&
+      (needs.create-infrastructure.result == 'success' || needs.create-infrastructure.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_image: ${{ steps.build-frontend.outputs.image }}
+      backend_image: ${{ steps.build-backend.outputs.image }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Frontend image
+        id: build-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG -f frontend/Dockerfile .
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push Backend image
+        id: build-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG -f backend/Dockerfile backend/
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build Summary
+        run: |
+          echo "### 🐳 Docker Images Built and Pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** \`${{ steps.build-frontend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** \`${{ steps.build-backend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # Job 3: Deploy a EC2
+  deploy-to-ec2:
+    name: Deploy Application to EC2
+    needs: [create-infrastructure, build-and-push]
+    if: |
+      always() &&
+      (github.event.inputs.action == 'create-and-deploy' || github.event.inputs.action == 'deploy-only') &&
+      needs.build-and-push.result == 'success'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Determine EC2 Host
+        id: ec2-host
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "create-and-deploy" ]; then
+            echo "host=${{ needs.create-infrastructure.outputs.ec2_ip }}" >> $GITHUB_OUTPUT
+          else
+            echo "host=${{ secrets.EC2_HOST }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ steps.ec2-host.outputs.host }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          # Save SSH key
+          echo "$EC2_SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          
+          # Deploy to EC2
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            # Login to ECR
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            
+            # Navigate to project (or clone if first time)
+            if [ ! -d "~/dark-trifid" ]; then
+              cd ~
+              git clone https://github.com/${{ github.repository }}.git dark-trifid
+            fi
+            
+            cd ~/dark-trifid
+            git pull origin main
+            
+            # Set environment variables
+            export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+            
+            # Stop current containers
+            sudo docker compose down || true
+            
+            # Pull latest images
+            sudo docker pull ${{ needs.build-and-push.outputs.frontend_image }}
+            sudo docker pull ${{ needs.build-and-push.outputs.backend_image }}
+            
+            # Start with new images
+            sudo -E docker compose -f docker-compose.prod.yml up -d
+            
+            # Clean up old images
+            sudo docker image prune -f
+            
+            echo "✅ Deployment completed successfully!"
+          EOF
+          
+          # Clean up SSH key
+          rm -f private_key.pem
+
+      - name: Verify Deployment
+        env:
+          EC2_HOST: ${{ steps.ec2-host.outputs.host }}
+        run: |
+          echo "### ✅ Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application URL:** http://$EC2_HOST" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend Image:** \`${{ needs.build-and-push.outputs.frontend_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Image:** \`${{ needs.build-and-push.outputs.backend_image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 Your application is now live!" >> $GITHUB_STEP_SUMMARY
+
+  # Job 4: Destroy Infrastructure
+  destroy-infrastructure:
+    name: Destroy Infrastructure
+    if: github.event.inputs.action == 'destroy-all'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Destroy
+        run: |
+          cd terraform
+          terraform destroy -auto-approve
+
+      - name: Destruction Summary
+        run: |
+          echo "### 🗑️ Infrastructure Destroyed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All AWS resources have been destroyed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Note:** ECR images are NOT deleted. Clean them manually if needed." >> $GITHUB_STEP_SUMMARY

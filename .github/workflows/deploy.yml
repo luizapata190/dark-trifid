@@ -1,0 +1,120 @@
+name: CD - Deploy to Production
+
+on:
+  push:
+    branches:
+      - main  # Solo deploys cuando se hace merge a main
+  workflow_dispatch:  # Permite ejecución manual
+
+env:
+  AWS_REGION: us-east-1
+  ECR_FRONTEND_REPOSITORY: dark-trifid-frontend
+  ECR_BACKEND_REPOSITORY: dark-trifid-backend
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout del código
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Configurar credenciales de AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3. Login a Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Construir, etiquetar y subir imagen del Frontend
+      - name: Build, tag, and push Frontend image to Amazon ECR
+        id: build-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG -f frontend/Dockerfile .
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # 5. Construir, etiquetar y subir imagen del Backend
+      - name: Build, tag, and push Backend image to Amazon ECR
+        id: build-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG -f backend/Dockerfile backend/
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # 6. Desplegar a EC2
+      - name: Deploy to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          # Guardar la clave SSH
+          echo "$EC2_SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          
+          # Conectarse a EC2 y actualizar contenedores
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            # Login a ECR desde EC2
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            
+            # Ir al directorio del proyecto
+            cd ~/dark-trifid
+            
+            # Actualizar código
+            git pull origin main
+            
+            # Detener contenedores actuales
+            sudo docker compose down
+            
+            # Descargar nuevas imágenes
+            sudo docker pull ${{ steps.build-frontend.outputs.image }}
+            sudo docker pull ${{ steps.build-backend.outputs.image }}
+            
+            # Iniciar con nuevas imágenes
+            sudo docker compose up -d
+            
+            # Limpiar imágenes antiguas
+            sudo docker image prune -f
+          EOF
+          
+          # Limpiar clave SSH
+          rm -f private_key.pem
+
+      # 7. Verificar despliegue
+      - name: Verify deployment
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          echo "🚀 Deployment completed!"
+          echo "🌐 Application URL: http://$EC2_HOST"
+          echo "📊 Check application status at: http://$EC2_HOST"
+
+      # 8. Notificación de éxito
+      - name: Deployment summary
+        run: |
+          echo "### ✅ Deployment Successful! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend Image:** \`${{ steps.build-frontend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Image:** \`${{ steps.build-backend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Application URL:** http://${{ secrets.EC2_HOST }}" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,104 @@
+name: CD - Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop  # Deploy a staging cuando se hace merge a develop
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_FRONTEND_REPOSITORY: dark-trifid-frontend
+  ECR_BACKEND_REPOSITORY: dark-trifid-backend
+  ENVIRONMENT: staging
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging Environment
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: http://${{ secrets.STAGING_EC2_HOST }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Frontend image
+        id: build-frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: staging-${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG -f frontend/Dockerfile .
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:staging
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:staging
+          echo "image=$ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push Backend image
+        id: build-backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: staging-${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG -f backend/Dockerfile backend/
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:staging
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:staging
+          echo "image=$ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Staging EC2
+        env:
+          EC2_HOST: ${{ secrets.STAGING_EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          echo "$EC2_SSH_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          
+          ssh -o StrictHostKeyChecking=no -i private_key.pem $EC2_USER@$EC2_HOST << 'EOF'
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+            
+            if [ ! -d "~/dark-trifid" ]; then
+              cd ~
+              git clone https://github.com/${{ github.repository }}.git dark-trifid
+            fi
+            
+            cd ~/dark-trifid
+            git checkout develop
+            git pull origin develop
+            
+            export ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+            
+            sudo docker compose down || true
+            sudo docker pull ${{ steps.build-frontend.outputs.image }}
+            sudo docker pull ${{ steps.build-backend.outputs.image }}
+            sudo -E docker compose -f docker-compose.prod.yml up -d
+            sudo docker image prune -f
+          EOF
+          
+          rm -f private_key.pem
+
+      - name: Deployment Summary
+        run: |
+          echo "### 🚀 Deployed to Staging!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Staging" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** http://${{ secrets.STAGING_EC2_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** \`${{ steps.build-frontend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** \`${{ steps.build-backend.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Test the changes in staging before promoting to production" >> $GITHUB_STEP_SUMMARY

@@ -6,33 +6,6 @@ Construido con **FastAPI** (Python) y una arquitectura en capas profesional.
 
 ## 🎯 Características
 
-- **Página de Inicio**: Información del evento, ubicación y fecha
-- **Agenda**: Lista de 8 charlas con detalles y ponentes
-- **Búsqueda**: Funcionalidad para buscar charlas por título, ponente o categoría
-- **Diseño Responsivo**: Adaptado a dispositivos móviles y de escritorio
-- **Arquitectura Limpia**: Separación de responsabilidades (Datos, Servicios, Web)
-
-## 📁 Estructura del Proyecto
-
-```text
-/
-├── database/              # Capa de Datos (Repositorio)
-├── services/              # Capa de Negocio (Lógica)
-├── web/                   # Capa de Presentación (Rutas, Templates, Static)
-├── terraform/             # Infraestructura como código (Terraform)
-├── main.py                # Punto de entrada (FastAPI)
-├── pyproject.toml         # Gestión de dependencias (Poetry)
-├── Dockerfile             # Configuración Docker
-├── docker-compose.yml     # Orquestación
-├── setup-ec2.sh           # Script de instalación para EC2
-├── ec2-user-data.sh       # User Data para EC2
-├── aws-cli-launch.sh      # Script de lanzamiento con AWS CLI
-└── DEPLOYMENT.md          # Guía completa de despliegue
-```
-
-## 📋 Requisitos Previos
-
-- Python 3.9+
 - [Poetry](https://python-poetry.org/docs/#installation) (Gestor de paquetes)
 - Docker y Docker Compose (Recomendado para deployment)
 

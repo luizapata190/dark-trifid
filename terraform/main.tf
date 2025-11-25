@@ -25,9 +25,9 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "Nombre del key pair para SSH"
+  description = "Nombre del key pair para SSH (opcional)"
   type        = string
-  # Debes crear este key pair en AWS Console primero
+  default     = ""  # Dejar vacío si no necesitas SSH
 }
 
 variable "project_name" {
@@ -84,9 +84,9 @@ resource "aws_security_group" "dark_trifid_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Puerto personalizado (ajustar según tu aplicación)
+  # Puerto del backend
   ingress {
-    description = "Application Port"
+    description = "Backend API Port"
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
@@ -106,20 +106,55 @@ resource "aws_security_group" "dark_trifid_sg" {
   }
 }
 
+# IAM Role para EC2 (permite acceso a ECR)
+resource "aws_iam_role" "ec2_ecr_role" {
+  name = "${var.project_name}-ec2-ecr-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ec2-role"
+  }
+}
+
+# Attach policy para ECR
+resource "aws_iam_role_policy_attachment" "ecr_policy" {
+  role       = aws_iam_role.ec2_ecr_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# Instance Profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2_ecr_role.name
+}
+
 # User Data Script
-data "template_file" "user_data" {
-  template = file("${path.module}/ec2-user-data.sh")
+locals {
+  user_data = file("${path.module}/user-data.sh")
 }
 
 # EC2 Instance
 resource "aws_instance" "dark_trifid" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
-  key_name      = var.key_name
+  key_name      = var.key_name != "" ? var.key_name : null
 
   vpc_security_group_ids = [aws_security_group.dark_trifid_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-  user_data = data.template_file.user_data.rendered
+  user_data = local.user_data
 
   # Configuración del volumen raíz
   root_block_device {
@@ -158,7 +193,7 @@ output "public_dns" {
 
 output "ssh_connection" {
   description = "Comando para conectarse por SSH"
-  value       = "ssh -i ${var.key_name}.pem ec2-user@${aws_instance.dark_trifid.public_ip}"
+  value       = var.key_name != "" ? "ssh -i ${var.key_name}.pem ec2-user@${aws_instance.dark_trifid.public_ip}" : "SSH key not configured"
 }
 
 output "application_url" {
