@@ -77,10 +77,18 @@ jobs:
       - name: Detach Policies from Role
         run: |
           echo "🔓 Detaching policies from role..."
+          
+          # Detach ECR policy
           aws iam detach-role-policy \
             --role-name ${PROJECT_NAME}-ec2-ecr-role \
             --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly 2>/dev/null || \
-            echo "⚠️ Policy not attached or role doesn't exist"
+            echo "⚠️ ECR policy not attached or role doesn't exist"
+          
+          # Detach SSM policy
+          aws iam detach-role-policy \
+            --role-name ${PROJECT_NAME}-ec2-ecr-role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore 2>/dev/null || \
+            echo "⚠️ SSM policy not attached or role doesn't exist"
 
       - name: Delete IAM Role
         run: |
