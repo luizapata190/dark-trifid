@@ -1,210 +1,277 @@
-# Google Cloud Tech Week 2028
+# 🌐 Dark Trifid - Google Cloud Tech Week 2028
 
-Sitio web informativo para **Google Cloud Tech Week 2028** - una semana completa dedicada a explorar las últimas innovaciones en Google Cloud Platform.
-
-Construido con **FastAPI** (Python) y una arquitectura en capas profesional.
+Aplicación web full-stack para **Google Cloud Tech Week 2028** con CI/CD automatizado y despliegue en AWS.
 
 ## 🎯 Características
 
-- [Poetry](https://python-poetry.org/docs/#installation) (Gestor de paquetes)
-- Docker y Docker Compose (Recomendado para deployment)
-
-## 🚀 Ejecución Local (Sin Docker)
-
-### 1. Instalar dependencias
-
-```bash
-poetry install
-```
-
-### 2. Ejecutar la aplicación
-
-```bash
-poetry run uvicorn main:app --reload
-```
-
-### 3. Acceder al sitio
-
-- **Aplicación**: http://localhost:8000
-- **Documentación API**: http://localhost:8000/docs
-
-## 🐳 Ejecución con Docker
-
-### Comandos principales
-
-```bash
-# Construir y levantar (desarrollo)
-docker-compose up --build -d
-
-# Ver logs en tiempo real
-docker-compose logs -f
-
-# Verificar estado
-docker-compose build --no-cache
-docker-compose up -d
-
-# Limpiar recursos Docker no utilizados
-docker system prune
-```
-
-## 🛠️ Desarrollo
-
-### Hacer cambios en el código
-
-1. Edita los archivos necesarios
-2. Reconstruye y reinicia Docker:
-   ```bash
-   docker-compose up --build -d
-   ```
-3. Refresca el navegador con **Ctrl + Shift + R** (forzar sin caché)
-
-### Estructura de archivos clave
-
-- **`database/repository.py`**: Datos del evento y charlas
-- **`services/catalog_service.py`**: Lógica de búsqueda y filtrado
-- **`web/routes.py`**: Rutas de la aplicación
-- **`web/templates/`**: Plantillas HTML (Jinja2)
-- **`web/static/`**: CSS y archivos estáticos
-
-## 📦 Dependencias
-
-- **FastAPI**: Framework web moderno y rápido
-- **Uvicorn**: Servidor ASGI de alto rendimiento
-- **Jinja2**: Motor de plantillas
-- **Python-multipart**: Manejo de formularios
-
-## 🔧 Configuración de Poetry
-
-Este proyecto usa `package-mode = false` porque es una aplicación web, no un paquete distribuible. Requiere **Poetry 1.8.0+**.
-
-## 📝 Notas
-
-- Los datos de charlas y ponentes son ficticios para demostración
-- El proyecto está dockerizado para fácil deployment en Rancher Desktop o cualquier entorno Docker
-- La aplicación usa FastAPI con templates HTML (no es una SPA)
-
-## ☁️ Despliegue en AWS EC2
-
-Este proyecto incluye múltiples métodos para desplegar en AWS EC2, desde manual hasta completamente automatizado.
-
-### 📚 Documentación Completa
-
-Para instrucciones detalladas de despliegue, consulta **[DEPLOYMENT.md](./DEPLOYMENT.md)** que incluye:
-
-- ✅ Instalación manual con script automatizado
-- ✅ Automatización con AWS User Data
-- ✅ Despliegue con AWS CLI
-- ✅ Infraestructura como código con Terraform
-- ✅ Comparación de métodos y recomendaciones
-
-### 🚀 Inicio Rápido
-
-#### Opción 1: Script Automatizado (Recomendado para principiantes)
-
-```bash
-# Conectarse a EC2
-ssh -i tu-key.pem ec2-user@<IP-PUBLICA>
-
-# Descargar y ejecutar script
-curl -O https://raw.githubusercontent.com/luizapata190/dark-trifid/main/setup-ec2.sh
-chmod +x setup-ec2.sh
-./setup-ec2.sh
-```
-
-#### Opción 2: User Data (Completamente automatizado)
-
-Al crear la instancia EC2, pega el contenido de [`ec2-user-data.sh`](./ec2-user-data.sh) en la sección **User Data** de AWS Console.
-
-#### Opción 3: AWS CLI (Para desarrolladores)
-
-```bash
-# Editar variables en el script
-nano aws-cli-launch.sh
-
-# Ejecutar
-chmod +x aws-cli-launch.sh
-./aws-cli-launch.sh
-```
-
-#### Opción 4: Terraform (Para producción)
-
-```bash
-cd terraform/
-cp terraform.tfvars.example terraform.tfvars
-# Editar terraform.tfvars con tus valores
-terraform init
-terraform plan
-terraform apply
-```
-
-### 📋 Requisitos Previos para AWS
-
-- Cuenta de AWS activa
-- Key Pair creado en AWS EC2
-- Security Group configurado (puertos: 22, 80, 443, 8000)
-- AWS CLI configurado (para opciones 3 y 4)
-
-### 🔍 Verificar Despliegue
-
-```bash
-# Ver logs de instalación
-ssh -i tu-key.pem ec2-user@<IP-PUBLICA>
-sudo tail -f /var/log/user-data.log
-
-# Verificar contenedores
-sudo docker compose ps
-sudo docker compose logs -f
-```
-
-### 📖 Más Información
-
-Consulta **[DEPLOYMENT.md](./DEPLOYMENT.md)** para guías paso a paso, troubleshooting y mejores prácticas.
-
-## 🤝 Contribuir
-
-Este es un proyecto de demostración. Siéntete libre de usarlo como base para tus propios eventos.
+- ✅ **Frontend:** Nginx con HTML/CSS/JavaScript
+- ✅ **Backend:** FastAPI (Python) con arquitectura en capas
+- ✅ **Contenedores:** Docker y Docker Compose
+- ✅ **CI/CD:** GitHub Actions automatizado
+- ✅ **Infraestructura:** Terraform + AWS (EC2, ECR, Elastic IP)
+- ✅ **Deploy:** Automático via SSM (sin SSH keys)
 
 ---
 
-**Desarrollado con ❤️ usando FastAPI y Docker**
+## 📚 Documentación Completa
 
-**Despliegue en EC2 de AWS**
+**👉 [DOCUMENTATION-INDEX.md](DOCUMENTATION-INDEX.md)** - Índice maestro de toda la documentación
 
-**Paso 1 
-**Actualziar  yum
-sudo yum update -y
+### Guías Principales:
 
-**Paso 2
-**Instalamos Git y utils de yum
-sudo yum install -y yum-utils git
+| Guía | Descripción |
+|------|-------------|
+| **[DEPLOYMENT.md](DEPLOYMENT.md)** | Métodos de despliegue |
+| **[CI-CD-GUIDE.md](CI-CD-GUIDE.md)** | CI/CD con GitHub Actions |
+| **[INFRASTRUCTURE-GUIDE.md](INFRASTRUCTURE-GUIDE.md)** | Infraestructura AWS con Terraform |
+| **[LEARNING-GUIDE.md](LEARNING-GUIDE.md)** | Aprender conceptos fundamentales |
+| **[ADAPTATION-GUIDE.md](ADAPTATION-GUIDE.md)** | Adaptar a otros proyectos |
 
-**Paso 3 
-**Instalamos Docker 
-sudo yum install docker -y
+---
 
+## 🚀 Inicio Rápido
 
-**Paso 4 
-**Instalamos Docker Compose 
-sudo mkdir -p /usr/local/lib/docker/cli-plugins
+### Desarrollo Local
 
-sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
-sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker ec2-user
-newgrp docker
-
-docker compose version
-
-**Paso 5 
-**Clonar el proyecto 
+```bash
+# 1. Clonar proyecto
 git clone https://github.com/luizapata190/dark-trifid.git
+cd dark-trifid
 
-**Paso6
-**Nos paramos en el proyecto
-cd dark-trifid/
+# 2. Iniciar con Docker Compose
+docker compose up -d
 
-**Paso 7
-**Ejecutamos Docker Compose
-docker compose up --build -d
+# 3. Acceder
+http://localhost:8888  # Frontend
+http://localhost:8000  # Backend API
+```
+
+### Producción (AWS)
+
+```bash
+# 1. Configurar secrets en GitHub
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+
+# 2. Ejecutar workflow "Full Stack"
+GitHub > Actions > Full Stack > create-and-deploy
+
+# 3. Acceder
+http://ELASTIC-IP  # IP fija que nunca cambia
+```
+
+---
+
+## 🏗️ Arquitectura
+
+### Local (Desarrollo)
+
+```
+Docker Compose
+├── Frontend (Nginx) → localhost:8888
+└── Backend (FastAPI) → localhost:8000
+```
+
+### Producción (AWS)
+
+```
+GitHub Actions (CI/CD)
+    ↓
+Amazon ECR (Imágenes Docker)
+    ↓
+AWS EC2 (Elastic IP)
+├── Frontend → http://ELASTIC-IP
+└── Backend → http://ELASTIC-IP/api
+```
+
+---
+
+## 📋 Estructura del Proyecto
+
+```
+dark-trifid/
+├── frontend/              # Frontend (Nginx)
+│   ├── static/           # HTML, CSS, JS
+│   └── Dockerfile
+├── backend/              # Backend (FastAPI)
+│   ├── main.py          # Punto de entrada
+│   ├── database/        # Datos
+│   ├── services/        # Lógica de negocio
+│   └── Dockerfile
+├── terraform/            # Infraestructura como código
+│   ├── main.tf
+│   ├── variables.tf
+│   └── user-data.sh
+├── .github/workflows/    # CI/CD
+│   ├── full-stack.yml   # Infraestructura + Deploy
+│   ├── deploy.yml       # Deploy automático
+│   └── emergency-cleanup.yml
+├── docker-compose.yml    # Local
+├── docker-compose.prod.yml  # Producción
+└── docs/                 # Documentación
+```
+
+---
+
+## 🔄 Workflow de Desarrollo
+
+### Día a Día:
+
+```bash
+# 1. Desarrollar localmente
+docker compose up -d
+# Editar archivos...
+http://localhost:8888
+
+# 2. Commit y push
+git add .
+git commit -m "feat: nueva funcionalidad"
+git push origin main
+
+# 3. Deploy automático
+# GitHub Actions despliega a AWS automáticamente
+
+# 4. Verificar en producción
+http://ELASTIC-IP
+```
+
+---
+
+## 🛠️ Tecnologías
+
+### Frontend
+- HTML5, CSS3, JavaScript
+- Nginx (servidor web)
+
+### Backend
+- Python 3.11
+- FastAPI (framework web)
+- Uvicorn (servidor ASGI)
+
+### DevOps
+- Docker & Docker Compose
+- GitHub Actions (CI/CD)
+- Terraform (IaC)
+- AWS (EC2, ECR, IAM, Elastic IP)
+
+---
+
+## 📊 Workflows Disponibles
+
+| Workflow | Trigger | Propósito |
+|----------|---------|-----------|
+| **Full Stack** | Manual | Crear infraestructura + Deploy |
+| **CD - Deploy to Production** | Push a `main` | Deploy automático |
+| **CI - Pull Request Checks** | Pull Request | Validar código |
+| **Emergency Cleanup** | Manual | Limpiar recursos AWS |
+
+---
+
+## 🌐 URLs
+
+### Local:
+- Frontend: `http://localhost:8888`
+- Backend: `http://localhost:8000`
+- API Docs: `http://localhost:8000/docs`
+
+### Producción:
+- Aplicación: `http://34.234.152.61` (Elastic IP)
+- Repositorio: `https://github.com/luizapata190/dark-trifid`
+- Actions: `https://github.com/luizapata190/dark-trifid/actions`
+
+---
+
+## 💡 Comandos Útiles
+
+### Docker Compose (Local)
+
+```bash
+# Iniciar
+docker compose up -d
+
+# Ver logs
+docker compose logs -f
+
+# Parar
+docker compose down
+
+# Rebuild
+docker compose up -d --build
+```
+
+### GitHub Actions
+
+```bash
+# Ver workflows
+gh workflow list
+
+# Ejecutar workflow
+gh workflow run "Full Stack"
+
+# Ver logs
+gh run view <run-id> --log
+```
+
+### Terraform
+
+```bash
+# Inicializar
+terraform init
+
+# Planear cambios
+terraform plan
+
+# Aplicar cambios
+terraform apply
+
+# Destruir infraestructura
+terraform destroy
+```
+
+---
+
+## 📖 Documentación Detallada
+
+Para información completa, consulta:
+
+- **[DOCUMENTATION-INDEX.md](DOCUMENTATION-INDEX.md)** - Índice maestro
+- **[LEARNING-GUIDE.md](LEARNING-GUIDE.md)** - Aprender conceptos
+- **[ADAPTATION-GUIDE.md](ADAPTATION-GUIDE.md)** - Adaptar a otros proyectos
+- **[CI-CD-GUIDE.md](CI-CD-GUIDE.md)** - CI/CD completo
+- **[INFRASTRUCTURE-GUIDE.md](INFRASTRUCTURE-GUIDE.md)** - Infraestructura AWS
+
+---
+
+## 🤝 Contribuir
+
+Este proyecto es una demostración de CI/CD profesional. Siéntete libre de:
+
+- Usarlo como base para tus proyectos
+- Adaptarlo a tus necesidades
+- Aprender de la arquitectura
+- Compartir mejoras
+
+---
+
+## 📝 Licencia
+
+Este es un proyecto de demostración educativo.
+
+---
+
+## 🎓 Aprendizaje
+
+Este proyecto demuestra:
+
+✅ **Infraestructura como Código** (Terraform)  
+✅ **CI/CD Automatizado** (GitHub Actions)  
+✅ **Contenedores** (Docker)  
+✅ **Cloud Computing** (AWS)  
+✅ **DevOps Best Practices**  
+✅ **Arquitectura Multi-Contenedor**  
+
+---
+
+**Desarrollado con ❤️ usando FastAPI, Docker y AWS**
+
+**Última actualización:** 2025-11-25
