@@ -129,6 +129,7 @@ jobs:
               "set -e",
               "echo \"=== Starting deployment ===\"",
               "cd /home/ec2-user/dark-trifid || exit 1",
+              "git config --global --add safe.directory /home/ec2-user/dark-trifid",
               "git pull origin main",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
               "export ECR_REGISTRY='"$ECR_REGISTRY"'",
