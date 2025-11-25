@@ -242,13 +242,17 @@ jobs:
               "sudo -u ec2-user git pull origin main",
               "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin '"$ECR_REGISTRY"'",
               "export ECR_REGISTRY='"$ECR_REGISTRY"'",
-              "docker compose down || true",
+              "docker compose down",
               "docker pull '"$FRONTEND_IMAGE"'",
               "docker pull '"$BACKEND_IMAGE"'",
-              "docker compose -f docker-compose.prod.yml up -d",
+              "docker tag '"$FRONTEND_IMAGE"' '"$ECR_REGISTRY"'/dark-trifid-frontend:latest",
+              "docker tag '"$BACKEND_IMAGE"' '"$ECR_REGISTRY"'/dark-trifid-backend:latest",
+              "docker compose -f docker-compose.prod.yml up -d --force-recreate",
               "docker image prune -f",
               "echo \"=== Deployment completed ===\"",
-              "docker compose ps"
+              "docker compose ps",
+              "echo \"Frontend image: $(docker inspect dark-trifid-frontend --format='{{.Image}}')\"",
+              "echo \"Backend image: $(docker inspect dark-trifid-backend --format='{{.Image}}')\""
             ]' \
             --output text \
             --query "Command.CommandId")
