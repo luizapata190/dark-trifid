@@ -21,7 +21,7 @@ variable "aws_region" {
 variable "instance_type" {
   description = "Tipo de instancia EC2"
   type        = string
-  default     = "t2.micro"  # Free tier eligible
+  default     = "t3.micro"  # Free tier eligible (nuevo estándar)
 }
 
 variable "key_name" {
