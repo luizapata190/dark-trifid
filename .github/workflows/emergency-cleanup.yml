@@ -1,0 +1,168 @@
+name: Emergency Cleanup - Remove Orphaned Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DELETE" to confirm cleanup'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  PROJECT_NAME: dark-trifid
+
+jobs:
+  cleanup:
+    name: Clean Up Orphaned AWS Resources
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DELETE" ]; then
+            echo "❌ Confirmation failed. You must type 'DELETE' to proceed."
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: List Existing Resources
+        run: |
+          echo "### 🔍 Scanning for resources..." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check Security Group
+          if aws ec2 describe-security-groups --group-names ${PROJECT_NAME}-sg --region $AWS_REGION 2>/dev/null; then
+            echo "- ⚠️ Security Group: \`${PROJECT_NAME}-sg\` exists" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Security Group: Not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check IAM Role
+          if aws iam get-role --role-name ${PROJECT_NAME}-ec2-ecr-role 2>/dev/null; then
+            echo "- ⚠️ IAM Role: \`${PROJECT_NAME}-ec2-ecr-role\` exists" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ IAM Role: Not found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check Instance Profile
+          if aws iam get-instance-profile --instance-profile-name ${PROJECT_NAME}-ec2-profile 2>/dev/null; then
+            echo "- ⚠️ Instance Profile: \`${PROJECT_NAME}-ec2-profile\` exists" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Instance Profile: Not found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Remove Role from Instance Profile
+        run: |
+          echo "🔧 Removing role from instance profile..."
+          aws iam remove-role-from-instance-profile \
+            --instance-profile-name ${PROJECT_NAME}-ec2-profile \
+            --role-name ${PROJECT_NAME}-ec2-ecr-role 2>/dev/null || \
+            echo "⚠️ Role not in instance profile or doesn't exist"
+
+      - name: Delete Instance Profile
+        run: |
+          echo "🗑️ Deleting instance profile..."
+          aws iam delete-instance-profile \
+            --instance-profile-name ${PROJECT_NAME}-ec2-profile 2>/dev/null || \
+            echo "⚠️ Instance profile doesn't exist"
+
+      - name: Detach Policies from Role
+        run: |
+          echo "🔓 Detaching policies from role..."
+          aws iam detach-role-policy \
+            --role-name ${PROJECT_NAME}-ec2-ecr-role \
+            --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly 2>/dev/null || \
+            echo "⚠️ Policy not attached or role doesn't exist"
+
+      - name: Delete IAM Role
+        run: |
+          echo "🗑️ Deleting IAM role..."
+          aws iam delete-role \
+            --role-name ${PROJECT_NAME}-ec2-ecr-role 2>/dev/null || \
+            echo "⚠️ Role doesn't exist"
+
+      - name: Delete Security Groups
+        run: |
+          echo "🗑️ Deleting security groups..."
+          
+          # Delete by name
+          aws ec2 delete-security-group \
+            --group-name ${PROJECT_NAME}-sg \
+            --region $AWS_REGION 2>/dev/null || \
+            echo "⚠️ Security group (by name) doesn't exist"
+          
+          # Also try to find and delete any SG with project name in description
+          SG_IDS=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=${PROJECT_NAME}-sg" \
+            --query "SecurityGroups[*].GroupId" \
+            --output text \
+            --region $AWS_REGION 2>/dev/null)
+          
+          if [ ! -z "$SG_IDS" ]; then
+            for sg_id in $SG_IDS; do
+              echo "Deleting security group: $sg_id"
+              aws ec2 delete-security-group \
+                --group-id $sg_id \
+                --region $AWS_REGION 2>/dev/null || \
+                echo "⚠️ Could not delete $sg_id"
+            done
+          fi
+
+      - name: Verify Cleanup
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Cleanup Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          CLEANUP_SUCCESS=true
+          
+          # Verify Security Group
+          if aws ec2 describe-security-groups --group-names ${PROJECT_NAME}-sg --region $AWS_REGION 2>/dev/null; then
+            echo "- ❌ Security Group still exists" >> $GITHUB_STEP_SUMMARY
+            CLEANUP_SUCCESS=false
+          else
+            echo "- ✅ Security Group deleted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Verify IAM Role
+          if aws iam get-role --role-name ${PROJECT_NAME}-ec2-ecr-role 2>/dev/null; then
+            echo "- ❌ IAM Role still exists" >> $GITHUB_STEP_SUMMARY
+            CLEANUP_SUCCESS=false
+          else
+            echo "- ✅ IAM Role deleted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Verify Instance Profile
+          if aws iam get-instance-profile --instance-profile-name ${PROJECT_NAME}-ec2-profile 2>/dev/null; then
+            echo "- ❌ Instance Profile still exists" >> $GITHUB_STEP_SUMMARY
+            CLEANUP_SUCCESS=false
+          else
+            echo "- ✅ Instance Profile deleted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$CLEANUP_SUCCESS" = true ]; then
+            echo "🎉 **All resources cleaned up successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Next step:** Run the 'Full Stack - Infrastructure + Deployment' workflow" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some resources could not be deleted**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "You may need to delete them manually from AWS Console" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: Wait for AWS Propagation
+        run: |
+          echo "⏳ Waiting 30 seconds for AWS to propagate changes..."
+          sleep 30
+          echo "✅ Ready for next deployment"
