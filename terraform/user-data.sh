@@ -41,6 +41,19 @@ cd /home/ec2-user
 git clone https://github.com/luizapata190/dark-trifid.git
 chown -R ec2-user:ec2-user /home/ec2-user/dark-trifid
 
+# Get AWS account ID and region
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+REGION=$(ec2-metadata --availability-zone | sed 's/placement: \(.*\).$/\1/')
+
+# Create .env file for docker-compose
+cat > /home/ec2-user/dark-trifid/.env << EOF
+ECR_REGISTRY=${ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+AWS_REGION=us-east-1
+EOF
+
+chown ec2-user:ec2-user /home/ec2-user/dark-trifid/.env
+
 echo "=== Setup completed ==="
 date
-echo "Instance is ready. Application can be deployed via GitHub Actions."
+echo "Instance is ready. Waiting for images to be pushed to ECR..."
+echo "Application will be deployed via GitHub Actions."
