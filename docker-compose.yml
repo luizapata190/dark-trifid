@@ -24,7 +24,7 @@ services:
       dockerfile: frontend/Dockerfile
     container_name: dark-trifid-frontend
     ports:
-      - "80:80"
+      - "8888:80" # Cambiado a 8888 para evitar conflicto con IIS
     depends_on:
       - backend
     networks:
