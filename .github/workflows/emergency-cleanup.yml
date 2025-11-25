@@ -89,6 +89,73 @@ jobs:
             --role-name ${PROJECT_NAME}-ec2-ecr-role 2>/dev/null || \
             echo "⚠️ Role doesn't exist"
 
+      - name: Terminate EC2 Instances
+        run: |
+          echo "🔌 Terminating EC2 instances..."
+          
+          # Find instances with project tag
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${PROJECT_NAME}" "Name=instance-state-name,Values=running,stopped,stopping" \
+            --query "Reservations[*].Instances[*].InstanceId" \
+            --output text \
+            --region $AWS_REGION 2>/dev/null)
+          
+          if [ ! -z "$INSTANCE_IDS" ]; then
+            echo "Found instances: $INSTANCE_IDS"
+            aws ec2 terminate-instances \
+              --instance-ids $INSTANCE_IDS \
+              --region $AWS_REGION
+            
+            echo "⏳ Waiting for instances to terminate..."
+            aws ec2 wait instance-terminated \
+              --instance-ids $INSTANCE_IDS \
+              --region $AWS_REGION || echo "⚠️ Wait timeout, continuing..."
+            
+            echo "✅ Instances terminated"
+          else
+            echo "⚠️ No instances found"
+          fi
+
+      - name: Release Elastic IPs
+        run: |
+          echo "🗑️ Releasing Elastic IPs..."
+          
+          # Find Elastic IPs with project tag
+          EIP_ALLOC_IDS=$(aws ec2 describe-addresses \
+            --filters "Name=tag:Name,Values=${PROJECT_NAME}-eip" \
+            --query "Addresses[*].AllocationId" \
+            --output text \
+            --region $AWS_REGION 2>/dev/null)
+          
+          if [ ! -z "$EIP_ALLOC_IDS" ]; then
+            for alloc_id in $EIP_ALLOC_IDS; do
+              echo "Releasing Elastic IP: $alloc_id"
+              
+              # First disassociate if associated
+              ASSOC_ID=$(aws ec2 describe-addresses \
+                --allocation-ids $alloc_id \
+                --query "Addresses[0].AssociationId" \
+                --output text \
+                --region $AWS_REGION 2>/dev/null)
+              
+              if [ "$ASSOC_ID" != "None" ] && [ ! -z "$ASSOC_ID" ]; then
+                aws ec2 disassociate-address \
+                  --association-id $ASSOC_ID \
+                  --region $AWS_REGION 2>/dev/null || \
+                  echo "⚠️ Could not disassociate $ASSOC_ID"
+              fi
+              
+              # Then release
+              aws ec2 release-address \
+                --allocation-id $alloc_id \
+                --region $AWS_REGION 2>/dev/null || \
+                echo "⚠️ Could not release $alloc_id"
+            done
+            echo "✅ Elastic IPs released"
+          else
+            echo "⚠️ No Elastic IPs found"
+          fi
+
       - name: Delete Security Groups
         run: |
           echo "🗑️ Deleting security groups..."
