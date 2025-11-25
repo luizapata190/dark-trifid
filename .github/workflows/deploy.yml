@@ -29,6 +29,37 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 2.5. Asegurar que los repositorios ECR existen
+      - name: Ensure ECR Repositories Exist
+        run: |
+          echo "🔍 Checking ECR repositories..."
+          
+          # Check and create frontend repository
+          if ! aws ecr describe-repositories --repository-names $ECR_FRONTEND_REPOSITORY --region $AWS_REGION 2>/dev/null; then
+            echo "Creating frontend repository..."
+            aws ecr create-repository \
+              --repository-name $ECR_FRONTEND_REPOSITORY \
+              --region $AWS_REGION \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
+            echo "✅ Frontend repository created"
+          else
+            echo "✅ Frontend repository already exists"
+          fi
+          
+          # Check and create backend repository
+          if ! aws ecr describe-repositories --repository-names $ECR_BACKEND_REPOSITORY --region $AWS_REGION 2>/dev/null; then
+            echo "Creating backend repository..."
+            aws ecr create-repository \
+              --repository-name $ECR_BACKEND_REPOSITORY \
+              --region $AWS_REGION \
+              --image-scanning-configuration scanOnPush=true \
+              --encryption-configuration encryptionType=AES256
+            echo "✅ Backend repository created"
+          else
+            echo "✅ Backend repository already exists"
+          fi
+
       # 3. Login a Amazon ECR
       - name: Login to Amazon ECR
         id: login-ecr

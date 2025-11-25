@@ -1,0 +1,136 @@
+name: Setup - Create ECR Repositories
+
+on:
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  create-ecr-repos:
+    name: Create ECR Repositories
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if repositories exist
+        id: check
+        run: |
+          echo "Checking for existing repositories..."
+          
+          # Check frontend
+          if aws ecr describe-repositories --repository-names dark-trifid-frontend --region $AWS_REGION 2>/dev/null; then
+            echo "frontend_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "frontend_exists=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check backend
+          if aws ecr describe-repositories --repository-names dark-trifid-backend --region $AWS_REGION 2>/dev/null; then
+            echo "backend_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "backend_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Frontend Repository
+        if: steps.check.outputs.frontend_exists == 'false'
+        run: |
+          echo "Creating frontend repository..."
+          aws ecr create-repository \
+            --repository-name dark-trifid-frontend \
+            --region $AWS_REGION \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+          echo "✅ Frontend repository created"
+
+      - name: Create Backend Repository
+        if: steps.check.outputs.backend_exists == 'false'
+        run: |
+          echo "Creating backend repository..."
+          aws ecr create-repository \
+            --repository-name dark-trifid-backend \
+            --region $AWS_REGION \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+          echo "✅ Backend repository created"
+
+      - name: Configure Lifecycle Policies
+        run: |
+          echo "Configuring lifecycle policies..."
+          
+          LIFECYCLE_POLICY='{
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }'
+          
+          # Apply to frontend
+          aws ecr put-lifecycle-policy \
+            --repository-name dark-trifid-frontend \
+            --lifecycle-policy-text "$LIFECYCLE_POLICY" \
+            --region $AWS_REGION || echo "⚠️ Could not set lifecycle policy for frontend"
+          
+          # Apply to backend
+          aws ecr put-lifecycle-policy \
+            --repository-name dark-trifid-backend \
+            --lifecycle-policy-text "$LIFECYCLE_POLICY" \
+            --region $AWS_REGION || echo "⚠️ Could not set lifecycle policy for backend"
+          
+          echo "✅ Lifecycle policies configured"
+
+      - name: Get Repository Information
+        id: info
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          
+          echo "registry=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+
+      - name: Summary
+        run: |
+          echo "### ✅ ECR Repositories Ready!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** \`${{ steps.info.outputs.registry }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repositories created:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ steps.info.outputs.registry }}/dark-trifid-frontend\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ steps.info.outputs.registry }}/dark-trifid-backend\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Features:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Scan on push enabled" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ AES-256 encryption" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Lifecycle policy (keep last 10 images)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Run the 'Full Stack - Infrastructure + Deployment' workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. Or push code to trigger automatic deployment" >> $GITHUB_STEP_SUMMARY
+          
+          # Also print to console
+          echo "========================================="
+          echo "✅ ECR Repositories Created Successfully"
+          echo "========================================="
+          echo ""
+          echo "Registry: ${{ steps.info.outputs.registry }}"
+          echo ""
+          echo "Frontend: ${{ steps.info.outputs.registry }}/dark-trifid-frontend"
+          echo "Backend:  ${{ steps.info.outputs.registry }}/dark-trifid-backend"
+          echo ""
+          echo "You can now run deployment workflows!"
