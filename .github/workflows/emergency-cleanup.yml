@@ -116,6 +116,45 @@ jobs:
             done
           fi
 
+      - name: Release Elastic IPs
+        run: |
+          echo "🗑️ Releasing Elastic IPs..."
+          
+          # Find Elastic IPs with project tag
+          EIP_ALLOC_IDS=$(aws ec2 describe-addresses \
+            --filters "Name=tag:Name,Values=${PROJECT_NAME}-eip" \
+            --query "Addresses[*].AllocationId" \
+            --output text \
+            --region $AWS_REGION 2>/dev/null)
+          
+          if [ ! -z "$EIP_ALLOC_IDS" ]; then
+            for alloc_id in $EIP_ALLOC_IDS; do
+              echo "Releasing Elastic IP: $alloc_id"
+              
+              # First disassociate if associated
+              ASSOC_ID=$(aws ec2 describe-addresses \
+                --allocation-ids $alloc_id \
+                --query "Addresses[0].AssociationId" \
+                --output text \
+                --region $AWS_REGION 2>/dev/null)
+              
+              if [ "$ASSOC_ID" != "None" ] && [ ! -z "$ASSOC_ID" ]; then
+                aws ec2 disassociate-address \
+                  --association-id $ASSOC_ID \
+                  --region $AWS_REGION 2>/dev/null || \
+                  echo "⚠️ Could not disassociate $ASSOC_ID"
+              fi
+              
+              # Then release
+              aws ec2 release-address \
+                --allocation-id $alloc_id \
+                --region $AWS_REGION 2>/dev/null || \
+                echo "⚠️ Could not release $alloc_id"
+            done
+          else
+            echo "⚠️ No Elastic IPs found"
+          fi
+
       - name: Verify Cleanup
         run: |
           echo "" >> $GITHUB_STEP_SUMMARY

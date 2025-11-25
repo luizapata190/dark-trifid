@@ -175,6 +175,23 @@ resource "aws_instance" "dark_trifid" {
   }
 }
 
+# Elastic IP (IP fija que no cambia)
+resource "aws_eip" "dark_trifid_eip" {
+  domain = "vpc"
+
+  tags = {
+    Name        = "${var.project_name}-eip"
+    Environment = "production"
+    ManagedBy   = "Terraform"
+  }
+}
+
+# Asociar Elastic IP a la instancia
+resource "aws_eip_association" "dark_trifid_eip_assoc" {
+  instance_id   = aws_instance.dark_trifid.id
+  allocation_id = aws_eip.dark_trifid_eip.id
+}
+
 # Outputs
 output "instance_id" {
   description = "ID de la instancia EC2"
@@ -182,8 +199,13 @@ output "instance_id" {
 }
 
 output "public_ip" {
-  description = "IP pública de la instancia"
-  value       = aws_instance.dark_trifid.public_ip
+  description = "IP pública FIJA (Elastic IP)"
+  value       = aws_eip.dark_trifid_eip.public_ip
+}
+
+output "elastic_ip" {
+  description = "Elastic IP asignada (no cambia al reiniciar)"
+  value       = aws_eip.dark_trifid_eip.public_ip
 }
 
 output "public_dns" {
@@ -193,10 +215,11 @@ output "public_dns" {
 
 output "ssh_connection" {
   description = "Comando para conectarse por SSH"
-  value       = var.key_name != "" ? "ssh -i ${var.key_name}.pem ec2-user@${aws_instance.dark_trifid.public_ip}" : "SSH key not configured"
+  value       = var.key_name != "" ? "ssh -i ${var.key_name}.pem ec2-user@${aws_eip.dark_trifid_eip.public_ip}" : "SSH key not configured"
 }
 
 output "application_url" {
-  description = "URL de la aplicación"
-  value       = "http://${aws_instance.dark_trifid.public_ip}"
+  description = "URL de la aplicación (con IP fija)"
+  value       = "http://${aws_eip.dark_trifid_eip.public_ip}"
 }
+
